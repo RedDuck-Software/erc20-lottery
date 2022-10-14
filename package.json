@@ -33,6 +33,7 @@
     "codestyle:fix": "yarn lint:sol:fix && yarn format:sol:fix && yarn lint:ts:fix && yarn format:ts:fix && yarn format:yml:fix"
   },
   "devDependencies": {
+    "@chainlink/contracts": "^0.5.1",
     "@commitlint/cli": "^17.0.2",
     "@commitlint/config-conventional": "^17.0.2",
     "@nomiclabs/hardhat-ethers": "^2.0.0",

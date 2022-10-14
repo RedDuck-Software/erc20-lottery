@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.1;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./LotteryVRFConsumer.sol";
 
-contract Lottery {
+contract Lottery is LotteryVRFConsumer {
     using SafeERC20 for IERC20;
 
     struct ParticipationInfo {
@@ -47,10 +48,11 @@ contract Lottery {
     );
 
     constructor(
+        address _vrfCoordinator,
         address _lotteryToken,
         uint256 _participateStart,
         uint256 _participateDuration
-    ) {
+    ) LotteryVRFConsumer(_vrfCoordinator) {
         require(_lotteryToken != address(0), "Lottery: invalid _lotteryToken");
         require(_participateStart != 0, "Lottery: invalid _participateStart");
         require(
@@ -134,9 +136,11 @@ contract Lottery {
     function selectRandomWinner() external {
         require(block.timestamp >= participateEnd, "Lottery: not ended");
         require(winNumber == 0, "Lottery: already selected");
+        require(totalAmount != 0, "Lottery: 0 participations");
 
-        // TODO get random number from VRF
-        uint256 _winNumber = 0;
+        requestRandomWords();
+
+        uint256 _winNumber = getRandomNumber(totalAmount);
 
         winNumber = _winNumber;
 
