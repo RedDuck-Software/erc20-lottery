@@ -4,9 +4,10 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./LotteryVRFConsumer.sol";
+import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
+import "hardhat/console.sol";
 
-contract Lottery is LotteryVRFConsumer {
+contract Lottery {
     using SafeERC20 for IERC20;
 
     struct ParticipationInfo {
@@ -17,18 +18,31 @@ contract Lottery is LotteryVRFConsumer {
     /// @notice total participation amount
     /// e.g. total winner reward
     uint256 public totalAmount;
+    uint256 public totalPlayedAmount;
+    uint256 public totalParticipants;
 
     /// @notice randomized wining number
     uint256 public winNumber;
-
+    uint256 public randomWinnerIdx;
     bool public rewardClaimed;
 
     mapping(address => ParticipationInfo[]) userParicipations;
 
-    address public immutable lotteryToken;
-    uint256 public immutable participateStart;
-    uint256 public immutable participateEnd;
+    address public lotteryToken;
+    uint256 public nextParticipateTimestamp;
 
+    uint256 public totalGamesPlayed;
+    uint256 public totalPayoutToday;
+
+    address public lastWinner;
+    uint256 public lastWonAmount;
+
+    uint256 public interval;
+    // uint256 public lastTimeStamp;
+    uint256 public randomNumber;
+
+    mapping(address => uint256) winnerBalances;
+    address[] public participants;
     event UserParticipate(
         address indexed user,
         uint256 totalAmountFrom,
@@ -48,30 +62,28 @@ contract Lottery is LotteryVRFConsumer {
     );
 
     constructor(
-        address _vrfCoordinator,
         address _lotteryToken,
-        uint256 _participateStart,
-        uint256 _participateDuration
-    ) LotteryVRFConsumer(_vrfCoordinator) {
+        uint256 _participateInterval
+    ) {
         require(_lotteryToken != address(0), "Lottery: invalid _lotteryToken");
-        require(_participateStart != 0, "Lottery: invalid _participateStart");
-        require(
-            _participateDuration != 0,
-            "Lottery: invalid _participateDuration"
-        );
+
+        // lastTimeStamp = block.timestamp;
+        interval = _participateInterval;
 
         lotteryToken = _lotteryToken;
-        participateStart = _participateStart;
-        participateEnd = _participateStart + _participateDuration;
+        nextParticipateTimestamp = block.timestamp + _participateInterval;
     }
 
+    //10:00 - 10:30 prepare time ,10:30 - lottery,11:00 - 11:30 - prepare time
     function participate(uint256 _tokenAmount)
         external
         returns (uint256 userParticipationId)
     {
         require(_tokenAmount != 0, "Lottery: invalid _tokenAmount");
-        require(block.timestamp >= participateStart, "Lottery: not started");
-        require(block.timestamp < participateEnd, "Lottery: ended");
+        require(
+            block.timestamp <= nextParticipateTimestamp,
+            "Lottery: has already started"
+        );
 
         IERC20(lotteryToken).safeTransferFrom(
             msg.sender,
@@ -92,6 +104,8 @@ contract Lottery is LotteryVRFConsumer {
         userParticipationId = userParicipations[msg.sender].length;
 
         userParicipations[msg.sender].push(participation);
+
+        participants.push(msg.sender);
 
         emit UserParticipate(
             msg.sender,
@@ -133,19 +147,45 @@ contract Lottery is LotteryVRFConsumer {
         emit WinnerClaim(_winner, _winnerIntervalId, amountToClaim);
     }
 
-    function selectRandomWinner() external {
-        require(block.timestamp >= participateEnd, "Lottery: not ended");
-        require(winNumber == 0, "Lottery: already selected");
-        require(totalAmount != 0, "Lottery: 0 participations");
-
-        requestRandomWords();
-
-        uint256 _winNumber = getRandomNumber(totalAmount);
-
-        winNumber = _winNumber;
-
-        emit RandomWinningNumberSelect(msg.sender, _winNumber);
+    function generateRandomNumber(uint256 participants)public returns(uint256){
+        randomWinnerIdx = uint256(keccak256(
+            abi.encodePacked(msg.sender,block.difficulty,block.timestamp)
+        )) % participants;
+        console.log('randomWinnerIdx',randomWinnerIdx);
+        return randomWinnerIdx;
     }
+
+    function selectRandomWinner() external {
+        require(
+            block.timestamp >= nextParticipateTimestamp,
+            "Lottery: !nextParticipateTimestamp"
+        );
+
+        if (participants.length == 0) {
+            nextParticipateTimestamp = block.timestamp + interval;
+        } else {
+            
+            uint256 _winNumber = generateRandomNumber(participants.length);
+            nextParticipateTimestamp = block.timestamp + interval;
+
+            totalGamesPlayed += 1;
+            address winner;
+            if(_winNumber == 0){
+                winner = participants[0];
+            } else {
+                winner = participants[_winNumber-1];
+            }
+            winnerBalances[winner] = totalAmount;
+
+            lastWinner=winner;
+            lastWonAmount = totalAmount;
+            
+            participants = new address[](0);
+            totalAmount=0;
+            emit RandomWinningNumberSelect(msg.sender, _winNumber);
+        }
+    }
+
 
     function getUserParticipations(address user)
         external
@@ -153,5 +193,9 @@ contract Lottery is LotteryVRFConsumer {
         returns (ParticipationInfo[] memory)
     {
         return userParicipations[user];
+    }
+
+    function getCurrect() public view returns (uint256) {
+        return block.timestamp;
     }
 }

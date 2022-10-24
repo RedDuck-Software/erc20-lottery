@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "hardhat/console.sol";
 
 abstract contract LotteryVRFConsumer is VRFConsumerBaseV2 {
     VRFCoordinatorV2Interface COORDINATOR;
@@ -23,7 +24,7 @@ abstract contract LotteryVRFConsumer is VRFConsumerBaseV2 {
     ) VRFConsumerBaseV2(_vrfCoordinator) {
         COORDINATOR = VRFCoordinatorV2Interface(_vrfCoordinator);
         s_owner = msg.sender;
-        s_subscriptionId = 281;
+        s_subscriptionId = 4798;
     }
 
     function requestRandomWords() internal {
@@ -44,6 +45,7 @@ abstract contract LotteryVRFConsumer is VRFConsumerBaseV2 {
     }
 
     function getRandomNumber(uint256 maxNumber) public view returns(uint256){
+        
         uint256 randomNumber = s_randomWords[0] % maxNumber + 1;
         return randomNumber;
     }

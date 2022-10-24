@@ -34,12 +34,17 @@ const config: HardhatUserConfig = {
             runs: 200,
           },
         },
-      }
+      },
     ],
   },
   networks: {
     main: getNetworkConfig('main'),
-    goerli: getNetworkConfig('goerli'),
+    goerli: {
+      url: 'https://eth-goerli.alchemyapi.io/v2/NxA_llQrwf7IkAvYGriII1UPQ7NIoAP4',
+      accounts: [
+        '569a5f3dd6702f290dd1dc09590df46e30798e971d13e1a0a44b944c43d28cd6',
+      ],
+    },
     hardhat: FORKING_NETWORK
       ? getForkNetworkConfig(FORKING_NETWORK)
       : getHardhatNetworkConfig(),
@@ -52,7 +57,7 @@ const config: HardhatUserConfig = {
     runOnCompile: OPTIMIZER,
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: 'WQYKKEI2PFSRFZRNQRADZA2JVYV385CYPD',
   },
 };
 

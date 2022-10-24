@@ -6,20 +6,20 @@
 import { ethers } from 'hardhat';
 
 async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
+  console.log('rereasdas');
+  // const XENTokenFactory = await ethers.getContractFactory('XENToken');
+  // const XENToken = await XENTokenFactory.deploy();
+  // await XENToken.deployed();
 
-  // We get the contract to deploy
-  const Greeter = await ethers.getContractFactory('Greeter');
-  const greeter = await Greeter.deploy('Hello, Hardhat!');
+  const LotteryFactory = await ethers.getContractFactory('Lottery');
+  const Lottery = await LotteryFactory.deploy(
+    '0x82Fbc13cB7e1046ff9F878E7ddcF1c5190416113',
+    900,
+  );
+  await Lottery.deployed();
 
-  await greeter.deployed();
-
-  console.log('Greeter deployed to:', greeter.address);
+  // console.log('XENToken', await XENToken.address);
+  console.log('Lottery', await Lottery.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
