@@ -14,6 +14,11 @@ contract Lottery {
         uint256 tokenAmount;
     }
 
+    struct WinnersInfo {
+        address winnerAddress;
+        uint256 wonAmount;
+    }
+
     // struct ParticipationInfo {
     //     uint256 totalAmountFrom;
     //     uint256 totalAmountTo;
@@ -47,6 +52,7 @@ contract Lottery {
 
     mapping(address => uint256) winnerBalances;
     ParticipantsInfo[] private participants;
+    WinnersInfo[] private winners;
 
     event WinnerClaim(
         address indexed winner,
@@ -163,6 +169,8 @@ contract Lottery {
             uint256 userBalance = usersContractBalance[winner];
             usersContractBalance[winner] = userBalance + totalPrizePool;
 
+            winners.push(WinnersInfo(winner, totalPrizePool));
+
             lastWinner = winner;
             lastWonAmount = totalPrizePool;
 
@@ -176,5 +184,9 @@ contract Lottery {
 
     function getCurrect() public view returns (uint256) {
         return block.timestamp;
+    }
+
+    function getAllWinners() public view returns (WinnersInfo[] memory) {
+        return winners;
     }
 }
