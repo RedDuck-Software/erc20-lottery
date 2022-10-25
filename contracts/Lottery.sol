@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/utils/Address.sol";
@@ -10,32 +9,33 @@ import "hardhat/console.sol";
 contract Lottery {
     using SafeERC20 for IERC20;
 
-    struct ParticipationInfo {
-        uint256 totalAmountFrom;
-        uint256 totalAmountTo;
-    }
+    // struct ParticipationInfo {
+    //     uint256 totalAmountFrom;
+    //     uint256 totalAmountTo;
+    // }
 
     /// @notice total participation amount
     /// e.g. total winner reward
-    uint256 public totalAmount;
+    uint256 public totalPrizePool;
     uint256 public totalPlayedAmount;
     uint256 public totalParticipants;
+    uint256 public totalAllTimePrizePool;
+    uint256 public totalGamesPlayed;
+    uint256 public totalPayoutToday;
+    address public lastWinner;
+    uint256 public lastWonAmount;
 
     /// @notice randomized wining number
     uint256 public winNumber;
     uint256 public randomWinnerIdx;
     bool public rewardClaimed;
 
-    mapping(address => ParticipationInfo[]) userParicipations;
+    // mapping(address => ParticipationInfo[]) userParicipations;
+    mapping (address => uint256) public usersContractBalance;
 
     address public lotteryToken;
     uint256 public nextParticipateTimestamp;
 
-    uint256 public totalGamesPlayed;
-    uint256 public totalPayoutToday;
-
-    address public lastWinner;
-    uint256 public lastWonAmount;
 
     uint256 public interval;
     // uint256 public lastTimeStamp;
@@ -43,12 +43,7 @@ contract Lottery {
 
     mapping(address => uint256) winnerBalances;
     address[] public participants;
-    event UserParticipate(
-        address indexed user,
-        uint256 totalAmountFrom,
-        uint256 totalAmountTo,
-        uint256 userParticipationId
-    );
+
 
     event WinnerClaim(
         address indexed winner,
@@ -74,87 +69,63 @@ contract Lottery {
         nextParticipateTimestamp = block.timestamp + _participateInterval;
     }
 
-    //10:00 - 10:30 prepare time ,10:30 - lottery,11:00 - 11:30 - prepare time
-    function participate(uint256 _tokenAmount)
-        external
-        returns (uint256 userParticipationId)
-    {
-        require(_tokenAmount != 0, "Lottery: invalid _tokenAmount");
-        require(
-            block.timestamp <= nextParticipateTimestamp,
-            "Lottery: has already started"
-        );
+    function deposit(uint256 tokenAmount)external{
+        require(tokenAmount != 0, "Lottery: invalid tokenAmount");
 
         IERC20(lotteryToken).safeTransferFrom(
             msg.sender,
             address(this),
-            _tokenAmount
+            tokenAmount
         );
 
-        uint256 _totalAmount = totalAmount;
-        uint256 _newTotalAmount = _totalAmount + _tokenAmount;
+        usersContractBalance[msg.sender] = tokenAmount;
+    }
 
-        ParticipationInfo memory participation = ParticipationInfo({
-            totalAmountFrom: _totalAmount + 1,
-            totalAmountTo: _newTotalAmount
-        });
+    function withdraw(uint256 _tokenAmount) external {
+        uint256 tokenAmount = usersContractBalance[msg.sender];
 
-        totalAmount = _newTotalAmount;
+        require(_tokenAmount <= _tokenAmount, "Lottery: no enough balance");
 
-        userParticipationId = userParicipations[msg.sender].length;
-
-        userParicipations[msg.sender].push(participation);
-
-        participants.push(msg.sender);
-
-        emit UserParticipate(
+        IERC20(lotteryToken).safeTransferFrom(
+            address(this),
             msg.sender,
-            participation.totalAmountFrom,
-            participation.totalAmountTo,
-            userParticipationId
+            tokenAmount
         );
+
+        usersContractBalance[msg.sender] = tokenAmount - _tokenAmount;
+
     }
 
-    function claimWinnerReward(address _winner, uint256 _winnerIntervalId)
+    //10:00 - 10:30 prepare time ,10:30 - lottery,11:00 - 11:30 - prepare time
+    function participate(uint256 tokenAmount)
         external
-        returns (uint256 amountToClaim)
+        returns (uint256 userParticipationId)
     {
-        require(!rewardClaimed, "Lottery: reward already claimed");
+        uint256 userBalance = usersContractBalance[msg.sender];
 
-        uint256 _winNumber = winNumber;
-
-        require(_winNumber != 0, "Lottery: random winner not selected");
+        require(tokenAmount != 0, "Lottery: invalid tokenAmount");
         require(
-            userParicipations[_winner].length > _winnerIntervalId,
-            "Lottery: invalid interval id"
+            block.timestamp <= nextParticipateTimestamp,
+            "Lottery: has already started"
         );
+        require(userBalance >= tokenAmount,"Lottery:insufficient balance");
 
-        ParticipationInfo memory winnerParticipation = userParicipations[
-            _winner
-        ][_winnerIntervalId];
-
-        require(
-            _winNumber >= winnerParticipation.totalAmountFrom &&
-                _winNumber <= winnerParticipation.totalAmountTo,
-            "Lottery: invalid winner"
-        );
-
-        amountToClaim = totalAmount;
-        rewardClaimed = true;
-
-        IERC20(lotteryToken).transfer(_winner, amountToClaim);
-
-        emit WinnerClaim(_winner, _winnerIntervalId, amountToClaim);
+        usersContractBalance[msg.sender] = userBalance - tokenAmount;
+        totalPrizePool = totalPrizePool + tokenAmount;
+        participants.push(msg.sender);
+        totalAllTimePrizePool = totalAllTimePrizePool + tokenAmount;
     }
 
-    function generateRandomNumber(uint256 participants)public returns(uint256){
+    function generateRandomNumber(uint256 _participants)public returns(uint256){
         randomWinnerIdx = uint256(keccak256(
             abi.encodePacked(msg.sender,block.difficulty,block.timestamp)
-        )) % participants;
-        console.log('randomWinnerIdx',randomWinnerIdx);
+        )) % _participants;
+
         return randomWinnerIdx;
     }
-
+    function getParticipants() public view returns(address[] memory){
+        return participants;
+    }
     function selectRandomWinner() external {
         require(
             block.timestamp >= nextParticipateTimestamp,
@@ -168,32 +139,30 @@ contract Lottery {
             uint256 _winNumber = generateRandomNumber(participants.length);
             nextParticipateTimestamp = block.timestamp + interval;
 
-            totalGamesPlayed += 1;
             address winner;
+
             if(_winNumber == 0){
                 winner = participants[0];
             } else {
                 winner = participants[_winNumber-1];
             }
-            winnerBalances[winner] = totalAmount;
+
+            uint256 userBalance = usersContractBalance[winner];
+            usersContractBalance[winner] = userBalance + totalPrizePool;
 
             lastWinner=winner;
-            lastWonAmount = totalAmount;
+            lastWonAmount = totalPrizePool;
             
             participants = new address[](0);
-            totalAmount=0;
+            totalPrizePool = 0;
+            totalGamesPlayed += 1;
+
             emit RandomWinningNumberSelect(msg.sender, _winNumber);
         }
     }
 
 
-    function getUserParticipations(address user)
-        external
-        view
-        returns (ParticipationInfo[] memory)
-    {
-        return userParicipations[user];
-    }
+
 
     function getCurrect() public view returns (uint256) {
         return block.timestamp;
