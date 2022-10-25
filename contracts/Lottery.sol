@@ -9,6 +9,11 @@ import "hardhat/console.sol";
 contract Lottery {
     using SafeERC20 for IERC20;
 
+    struct ParticipantsInfo {
+        address participantAddress;
+        uint256 tokenAmount;
+    }
+
     // struct ParticipationInfo {
     //     uint256 totalAmountFrom;
     //     uint256 totalAmountTo;
@@ -41,7 +46,7 @@ contract Lottery {
     uint256 public randomNumber;
 
     mapping(address => uint256) winnerBalances;
-    address[] public participants;
+    ParticipantsInfo[] private participants;
 
     event WinnerClaim(
         address indexed winner,
@@ -106,7 +111,9 @@ contract Lottery {
 
         usersContractBalance[msg.sender] = userBalance - tokenAmount;
         totalPrizePool = totalPrizePool + tokenAmount;
-        participants.push(msg.sender);
+        participants.push(
+            ParticipantsInfo(msg.sender, usersContractBalance[msg.sender])
+        );
         totalAllTimePrizePool = totalAllTimePrizePool + tokenAmount;
     }
 
@@ -129,7 +136,7 @@ contract Lottery {
         return randomWinnerIdx;
     }
 
-    function getParticipants() public view returns (address[] memory) {
+    function getParticipants() public view returns (ParticipantsInfo[] memory) {
         return participants;
     }
 
@@ -148,9 +155,9 @@ contract Lottery {
             address winner;
 
             if (_winNumber == 0) {
-                winner = participants[0];
+                winner = participants[0].participantAddress;
             } else {
-                winner = participants[_winNumber - 1];
+                winner = participants[_winNumber - 1].participantAddress;
             }
 
             uint256 userBalance = usersContractBalance[winner];
@@ -159,7 +166,7 @@ contract Lottery {
             lastWinner = winner;
             lastWonAmount = totalPrizePool;
 
-            participants = new address[](0);
+            delete participants;
             totalPrizePool = 0;
             totalGamesPlayed += 1;
 
