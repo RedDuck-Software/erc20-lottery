@@ -117,9 +117,7 @@ contract Lottery {
 
         usersContractBalance[msg.sender] = userBalance - tokenAmount;
         totalPrizePool = totalPrizePool + tokenAmount;
-        participants.push(
-            ParticipantsInfo(msg.sender, usersContractBalance[msg.sender])
-        );
+        participants.push(ParticipantsInfo(msg.sender, tokenAmount));
         totalAllTimePrizePool = totalAllTimePrizePool + tokenAmount;
     }
 
