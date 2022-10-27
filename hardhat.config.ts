@@ -39,12 +39,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     main: getNetworkConfig('main'),
-    goerli: {
-      url: 'https://eth-goerli.alchemyapi.io/v2/NxA_llQrwf7IkAvYGriII1UPQ7NIoAP4',
-      accounts: [
-        '569a5f3dd6702f290dd1dc09590df46e30798e971d13e1a0a44b944c43d28cd6',
-      ],
-    },
+    goerli: getNetworkConfig('goerli'),
     hardhat: FORKING_NETWORK
       ? getForkNetworkConfig(FORKING_NETWORK)
       : getHardhatNetworkConfig(),
