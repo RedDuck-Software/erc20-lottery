@@ -1,1 +1,3 @@
-export const TASK_DEPLOY_GREETER = 'deploy:greeter';
+export const DEPLOY_ERC20 = 'deploy-erc20';
+export const DEPLOY_LOTTERY = 'deploy-lottery';
+export const DEPLOY_VRF = 'deploy-vrf';
