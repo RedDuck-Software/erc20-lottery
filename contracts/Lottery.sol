@@ -4,14 +4,20 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+
+import "./LotteryVRFConsumer.sol";
 import "hardhat/console.sol";
 
-contract Lottery {
+contract Lottery is AutomationCompatible {
     using SafeERC20 for IERC20;
 
     struct ParticipantsInfo {
         address participantAddress;
-        uint256 tokenAmount;
+        uint256 depositedAmount;
+        uint256 startPoint; // totalPrizePool before user deposited tokens
+        uint256 endPoint; // totalPrizePool + depositedAmount
     }
 
     struct WinnersInfo {
@@ -19,13 +25,12 @@ contract Lottery {
         uint256 wonAmount;
     }
 
-    // struct ParticipationInfo {
-    //     uint256 totalAmountFrom;
-    //     uint256 totalAmountTo;
-    // }
+    /// @dev VRF Coordinator: Goerli testnet (https://docs.chain.link/docs/vrf-contracts/#configurations)
+    address private constant vrfCoordinator =
+        0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D;
+    LotteryVRFConsumer internal lotteryVRFConsumer;
 
     /// @notice total participation amount
-    /// e.g. total winner reward
     uint256 public totalPrizePool;
     uint256 public totalPlayedAmount;
     uint256 public totalParticipants;
@@ -35,11 +40,6 @@ contract Lottery {
     address public lastWinner;
     uint256 public lastWonAmount;
 
-    /// @notice randomized wining number
-    uint256 public winNumber;
-    uint256 public randomWinnerIdx;
-    bool public rewardClaimed;
-
     // mapping(address => ParticipationInfo[]) userParicipations;
     mapping(address => uint256) public usersContractBalance;
 
@@ -47,32 +47,26 @@ contract Lottery {
     uint256 public nextParticipateTimestamp;
 
     uint256 public interval;
-    // uint256 public lastTimeStamp;
     uint256 public randomNumber;
 
     mapping(address => uint256) winnerBalances;
+
     ParticipantsInfo[] private participants;
     WinnersInfo[] private winners;
 
-    event WinnerClaim(
-        address indexed winner,
-        uint256 intervalId,
-        uint256 claimAmount
-    );
+    event WinnerSelect(address indexed winner, uint256 indexed wonAmount);
 
-    event RandomWinningNumberSelect(
-        address indexed txSender,
-        uint256 winningNumber
-    );
-
-    constructor(address _lotteryToken, uint256 _participateInterval) {
+    constructor(
+        address _lotteryToken,
+        uint256 _participateInterval,
+        address _lotteryVRFAddr
+    ) {
         require(_lotteryToken != address(0), "Lottery: invalid _lotteryToken");
 
-        // lastTimeStamp = block.timestamp;
         interval = _participateInterval;
-
         lotteryToken = _lotteryToken;
         nextParticipateTimestamp = block.timestamp + _participateInterval;
+        lotteryVRFConsumer = LotteryVRFConsumer(_lotteryVRFAddr);
     }
 
     function deposit(uint256 tokenAmount) external {
@@ -92,92 +86,80 @@ contract Lottery {
 
         require(usersBalance >= _tokenAmount, "Lottery: no enough balance");
 
-        IERC20(lotteryToken).safeTransferFrom(
-            address(this),
-            msg.sender,
-            usersBalance
-        );
+        IERC20(lotteryToken).transfer(msg.sender, _tokenAmount);
 
         usersContractBalance[msg.sender] = usersBalance - _tokenAmount;
     }
 
     //10:00 - 10:30 prepare time ,10:30 - lottery,11:00 - 11:30 - prepare time
-    function participate(uint256 tokenAmount)
+    function participate(uint256 _tokenAmount)
         external
         returns (uint256 userParticipationId)
     {
         uint256 userBalance = usersContractBalance[msg.sender];
 
-        require(tokenAmount > 0, "Lottery: invalid tokenAmount");
+        require(_tokenAmount > 0, "Lottery: invalid tokenAmount");
         require(
             block.timestamp <= nextParticipateTimestamp,
             "Lottery: has already started"
         );
-        require(userBalance >= tokenAmount, "Lottery:insufficient balance");
+        require(userBalance >= _tokenAmount, "Lottery:insufficient balance");
 
-        usersContractBalance[msg.sender] = userBalance - tokenAmount;
-        totalPrizePool = totalPrizePool + tokenAmount;
-        participants.push(ParticipantsInfo(msg.sender, tokenAmount));
-        totalAllTimePrizePool = totalAllTimePrizePool + tokenAmount;
-    }
-
-    function generateRandomNumber(uint256 _participants)
-        public
-        returns (uint256)
-    {
-        randomWinnerIdx =
-            uint256(
-                keccak256(
-                    abi.encodePacked(
-                        msg.sender,
-                        block.difficulty,
-                        block.timestamp
-                    )
-                )
-            ) %
-            _participants;
-
-        return randomWinnerIdx;
+        participants.push(
+            ParticipantsInfo(
+                msg.sender,
+                _tokenAmount,
+                totalPrizePool,
+                totalPrizePool + _tokenAmount
+            )
+        );
+        totalPrizePool = totalPrizePool + _tokenAmount;
+        usersContractBalance[msg.sender] = userBalance - _tokenAmount;
+        totalAllTimePrizePool = totalAllTimePrizePool + _tokenAmount;
     }
 
     function getParticipants() public view returns (ParticipantsInfo[] memory) {
         return participants;
     }
 
-    function selectRandomWinner() external {
-        require(
-            block.timestamp >= nextParticipateTimestamp,
-            "Lottery: !nextParticipateTimestamp"
-        );
-
+    function selectRandomWinner() internal {
         if (participants.length == 0) {
             nextParticipateTimestamp = block.timestamp + interval;
         } else {
-            uint256 _winNumber = generateRandomNumber(participants.length);
+            address winner = getWinnerAddress();
             nextParticipateTimestamp = block.timestamp + interval;
-
-            address winner;
-
-            if (_winNumber == 0) {
-                winner = participants[0].participantAddress;
-            } else {
-                winner = participants[_winNumber - 1].participantAddress;
-            }
-
-            uint256 userBalance = usersContractBalance[winner];
-            usersContractBalance[winner] = userBalance + totalPrizePool;
 
             winners.push(WinnersInfo(winner, totalPrizePool));
 
+            usersContractBalance[winner] += totalPrizePool;
             lastWinner = winner;
             lastWonAmount = totalPrizePool;
-
-            delete participants;
-            totalPrizePool = 0;
             totalGamesPlayed += 1;
 
-            emit RandomWinningNumberSelect(msg.sender, _winNumber);
+            emit WinnerSelect(winner, totalPrizePool);
+
+            delete participants;
+            delete totalPrizePool;
         }
+    }
+
+    function checkUpkeep(
+        bytes calldata /* checkData */
+    )
+        public
+        override
+        returns (
+            bool upkeepNeeded,
+            bytes memory /* performData */
+        )
+    {
+        upkeepNeeded = block.timestamp >= nextParticipateTimestamp;
+    }
+
+    function performUpkeep(bytes calldata performData) external override {
+        (bool isUpkeepNeeded, ) = checkUpkeep(performData);
+        require(isUpkeepNeeded, "Lottery: No need to upkeep");
+        selectRandomWinner();
     }
 
     function getCurrect() public view returns (uint256) {
@@ -186,5 +168,24 @@ contract Lottery {
 
     function getAllWinners() public view returns (WinnersInfo[] memory) {
         return winners;
+    }
+
+    function getWinnerAddress() internal view returns (address) {
+        uint256 winningNumber = lotteryVRFConsumer.getRandomNumber(
+            totalPrizePool
+        );
+
+        address winner;
+
+        for (uint256 i = 0; i <= participants.length; i++) {
+            bool isWinner = winningNumber >= participants[i].startPoint &&
+                winningNumber <= participants[i].endPoint;
+
+            if (isWinner) {
+                winner = participants[i].participantAddress;
+                break;
+            }
+        }
+        return winner;
     }
 }
