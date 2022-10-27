@@ -30,7 +30,7 @@ contract LotteryVRFConsumer is VRFConsumerBaseV2 {
         s_subscriptionId = _subscriptionId;
     }
 
-    function requestRandomWords() internal {
+    function requestRandomWords() public {
         s_requestId = COORDINATOR.requestRandomWords(
             keyHash,
             s_subscriptionId,

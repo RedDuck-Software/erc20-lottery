@@ -1,17 +1,32 @@
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
 import "./LotteryVRFConsumer.sol";
 import "hardhat/console.sol";
 
 contract Lottery is AutomationCompatible {
     using SafeERC20 for IERC20;
+
+    LotteryVRFConsumer internal lotteryVRFConsumer;
+
+    address public lotteryToken;
+
+    uint256 public interval;
+    uint256 public nextParticipateTimestamp;
+
+    mapping(address => uint256) public usersContractBalance;
+
+    uint256 public totalPrizePool;
+    uint256 public totalAllTimePrizePool;
+    uint256 public totalGamesPlayed;
+    uint256 public lastWonAmount;
+
+    address public lastWinner;
 
     struct ParticipantsInfo {
         address participantAddress;
@@ -24,32 +39,6 @@ contract Lottery is AutomationCompatible {
         address winnerAddress;
         uint256 wonAmount;
     }
-
-    /// @dev VRF Coordinator: Goerli testnet (https://docs.chain.link/docs/vrf-contracts/#configurations)
-    address private constant vrfCoordinator =
-        0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D;
-    LotteryVRFConsumer internal lotteryVRFConsumer;
-
-    /// @notice total participation amount
-    uint256 public totalPrizePool;
-    uint256 public totalPlayedAmount;
-    uint256 public totalParticipants;
-    uint256 public totalAllTimePrizePool;
-    uint256 public totalGamesPlayed;
-    uint256 public totalPayoutToday;
-    address public lastWinner;
-    uint256 public lastWonAmount;
-
-    // mapping(address => ParticipationInfo[]) userParicipations;
-    mapping(address => uint256) public usersContractBalance;
-
-    address public lotteryToken;
-    uint256 public nextParticipateTimestamp;
-
-    uint256 public interval;
-    uint256 public randomNumber;
-
-    mapping(address => uint256) winnerBalances;
 
     ParticipantsInfo[] private participants;
     WinnersInfo[] private winners;
@@ -78,32 +67,29 @@ contract Lottery is AutomationCompatible {
             tokenAmount
         );
 
-        usersContractBalance[msg.sender] = tokenAmount;
+        usersContractBalance[msg.sender] += tokenAmount;
     }
 
     function withdraw(uint256 _tokenAmount) external {
-        uint256 usersBalance = usersContractBalance[msg.sender];
-
-        require(usersBalance >= _tokenAmount, "Lottery: no enough balance");
-
+        require(
+            usersContractBalance[msg.sender] >= _tokenAmount,
+            "Lottery: no enough balance"
+        );
         IERC20(lotteryToken).transfer(msg.sender, _tokenAmount);
 
-        usersContractBalance[msg.sender] = usersBalance - _tokenAmount;
+        usersContractBalance[msg.sender] -= _tokenAmount;
     }
 
-    //10:00 - 10:30 prepare time ,10:30 - lottery,11:00 - 11:30 - prepare time
-    function participate(uint256 _tokenAmount)
-        external
-        returns (uint256 userParticipationId)
-    {
-        uint256 userBalance = usersContractBalance[msg.sender];
-
+    function participate(uint256 _tokenAmount) external {
         require(_tokenAmount > 0, "Lottery: invalid tokenAmount");
         require(
             block.timestamp <= nextParticipateTimestamp,
             "Lottery: has already started"
         );
-        require(userBalance >= _tokenAmount, "Lottery:insufficient balance");
+        require(
+            usersContractBalance[msg.sender] >= _tokenAmount,
+            "Lottery:insufficient balance"
+        );
 
         participants.push(
             ParticipantsInfo(
@@ -114,12 +100,8 @@ contract Lottery is AutomationCompatible {
             )
         );
         totalPrizePool = totalPrizePool + _tokenAmount;
-        usersContractBalance[msg.sender] = userBalance - _tokenAmount;
-        totalAllTimePrizePool = totalAllTimePrizePool + _tokenAmount;
-    }
-
-    function getParticipants() public view returns (ParticipantsInfo[] memory) {
-        return participants;
+        usersContractBalance[msg.sender] -= _tokenAmount;
+        totalAllTimePrizePool += _tokenAmount;
     }
 
     function selectRandomWinner() internal {
@@ -147,6 +129,7 @@ contract Lottery is AutomationCompatible {
         bytes calldata /* checkData */
     )
         public
+        view
         override
         returns (
             bool upkeepNeeded,
@@ -162,15 +145,20 @@ contract Lottery is AutomationCompatible {
         selectRandomWinner();
     }
 
-    function getCurrect() public view returns (uint256) {
+    function getCurrentTimestamp() public view returns (uint256) {
         return block.timestamp;
+    }
+
+    function getParticipants() public view returns (ParticipantsInfo[] memory) {
+        return participants;
     }
 
     function getAllWinners() public view returns (WinnersInfo[] memory) {
         return winners;
     }
 
-    function getWinnerAddress() internal view returns (address) {
+    function getWinnerAddress() internal returns (address) {
+        lotteryVRFConsumer.requestRandomWords();
         uint256 winningNumber = lotteryVRFConsumer.getRandomNumber(
             totalPrizePool
         );
