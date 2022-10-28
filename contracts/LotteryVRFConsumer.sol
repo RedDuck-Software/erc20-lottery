@@ -8,12 +8,12 @@ import "hardhat/console.sol";
 contract LotteryVRFConsumer is VRFConsumerBaseV2 {
     VRFCoordinatorV2Interface COORDINATOR;
 
-    /// @dev VRF Coordinator: Goerli testnet (https://docs.chain.link/docs/vrf-contracts/#configurations)
+    /// @dev VRF Coordinator: BSC testnet (https://docs.chain.link/docs/vrf-contracts/#configurations)
     address private constant vrfCoordinator =
-        0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D;
+        0x6A2AAd07396B36Fe02a22b33cf443582f682c82f;
 
     bytes32 keyHash =
-        0x79d3d8832d904592c0bf9818b621522c988bb8b0c05cdc3b15aea1b6e8db0c15;
+        0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
 
     uint64 s_subscriptionId;
     uint32 callbackGasLimit = 100000;
