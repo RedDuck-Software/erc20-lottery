@@ -1,1 +1,1 @@
-export const VRF_SUBID = 5688;
+export const VRF_SUBID = 2038; // BSC testnet

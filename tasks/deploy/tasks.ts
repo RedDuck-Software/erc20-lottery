@@ -37,7 +37,9 @@ task(DEPLOY_VRF)
     );
 
     const lotteryVRFConsumer = await factory.deploy(params.subId);
+    console.log(1);
     await lotteryVRFConsumer.deployed();
+    console.log(2);
 
     logDeployment(
       'LotteryVRFConsumer',
@@ -48,8 +50,13 @@ task(DEPLOY_VRF)
   });
 
 task(DEPLOY_LOTTERY)
-  .addParam('token', '', '', types.string)
-  .addParam('lotteryInterval', '', 3600, types.int)
+  .addParam(
+    'token',
+    '',
+    '0x1718C874F80204EEB7a82dcdDACA8433203c9001',
+    types.string,
+  )
+  .addParam('lotteryInterval', '', 180, types.int)
   .addParam('vrfAddr', '', '', types.string)
   .setAction(async (params: TaskDeployLotteryParams, hre) => {
     await preAction(hre);
