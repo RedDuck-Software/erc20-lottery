@@ -5,6 +5,8 @@ import { logDeployment, preAction } from './funcs';
 import { DEPLOY_ERC20, DEPLOY_LOTTERY, DEPLOY_VRF } from './task-names';
 import { TaskDeployLotteryParams, TaskDeployVRFParams } from './types';
 
+import { VRF_SUBID } from '../../helpers/constants';
+
 task(DEPLOY_ERC20).setAction(async (_, hre) => {
   await preAction(hre);
   const [deployer] = await hre.ethers.getSigners();
@@ -24,7 +26,7 @@ task(DEPLOY_ERC20).setAction(async (_, hre) => {
 });
 
 task(DEPLOY_VRF)
-  .addParam('subId', 'VRF subscription ID', 0, types.int)
+  .addParam('subId', 'VRF subscription ID', VRF_SUBID, types.int)
   .setAction(async (params: TaskDeployVRFParams, hre) => {
     await preAction(hre);
     const [deployer] = await hre.ethers.getSigners();
