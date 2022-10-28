@@ -44,6 +44,11 @@ const config: HardhatUserConfig = {
       ? getForkNetworkConfig(FORKING_NETWORK)
       : getHardhatNetworkConfig(),
     local: getNetworkConfig('local'),
+    testnet: {
+      url: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+      chainId: 97,
+      accounts: [''],
+    },
   },
   gasReporter: {
     enabled: REPORT_GAS,
