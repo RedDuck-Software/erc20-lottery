@@ -2,18 +2,12 @@
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 
-import "./LotteryVRFConsumer.sol";
 import "hardhat/console.sol";
 
 contract Lottery is AutomationCompatible {
-    using SafeERC20 for IERC20;
-
-    LotteryVRFConsumer internal lotteryVRFConsumer;
-
     address public lotteryToken;
 
     uint256 public interval;
@@ -45,29 +39,24 @@ contract Lottery is AutomationCompatible {
 
     event WinnerSelect(address indexed winner, uint256 indexed wonAmount);
 
-    constructor(
-        address _lotteryToken,
-        uint256 _participateInterval,
-        address _lotteryVRFAddr
-    ) {
+    constructor(address _lotteryToken, uint256 _participateInterval) {
         require(_lotteryToken != address(0), "Lottery: invalid _lotteryToken");
 
         interval = _participateInterval;
         lotteryToken = _lotteryToken;
         nextParticipateTimestamp = block.timestamp + _participateInterval;
-        lotteryVRFConsumer = LotteryVRFConsumer(_lotteryVRFAddr);
     }
 
-    function deposit(uint256 tokenAmount) external {
-        require(tokenAmount != 0, "Lottery: invalid tokenAmount");
+    function deposit(uint256 _tokenAmount) external {
+        require(_tokenAmount != 0, "Lottery: invalid tokenAmount");
 
-        IERC20(lotteryToken).safeTransferFrom(
+        IERC20(lotteryToken).transferFrom(
             msg.sender,
             address(this),
-            tokenAmount
+            _tokenAmount
         );
 
-        usersContractBalance[msg.sender] += tokenAmount;
+        usersContractBalance[msg.sender] += _tokenAmount;
     }
 
     function withdraw(uint256 _tokenAmount) external {
@@ -109,14 +98,13 @@ contract Lottery is AutomationCompatible {
             nextParticipateTimestamp = block.timestamp + interval;
         } else {
             address winner = getWinnerAddress();
-            nextParticipateTimestamp = block.timestamp + interval;
-
             winners.push(WinnersInfo(winner, totalPrizePool));
 
-            usersContractBalance[winner] += totalPrizePool;
             lastWinner = winner;
+            usersContractBalance[winner] += totalPrizePool;
             lastWonAmount = totalPrizePool;
             totalGamesPlayed += 1;
+            nextParticipateTimestamp = block.timestamp + interval;
 
             emit WinnerSelect(winner, totalPrizePool);
 
@@ -157,11 +145,10 @@ contract Lottery is AutomationCompatible {
         return winners;
     }
 
-    function getWinnerAddress() internal returns (address) {
-        lotteryVRFConsumer.requestRandomWords();
-        uint256 winningNumber = lotteryVRFConsumer.getRandomNumber(
-            totalPrizePool
-        );
+    function getWinnerAddress() internal view returns (address) {
+        uint256 winningNumber = (uint256(
+            keccak256(abi.encodePacked(block.difficulty, block.timestamp))
+        ) % totalPrizePool) + 1;
 
         address winner;
 
