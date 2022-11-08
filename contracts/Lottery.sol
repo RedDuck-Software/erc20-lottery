@@ -14,6 +14,7 @@ contract Lottery is AutomationCompatible {
     uint256 public nextParticipateTimestamp;
 
     mapping(address => uint256) public usersContractBalance;
+    mapping(address => uint256) public usersDrawBalance;
 
     uint256 public totalPrizePool;
     uint256 public totalAllTimePrizePool;
@@ -80,6 +81,7 @@ contract Lottery is AutomationCompatible {
             "Lottery:insufficient balance"
         );
 
+        usersDrawBalance[msg.sender] += _tokenAmount;
         participants.push(
             ParticipantsInfo(
                 msg.sender,
@@ -110,6 +112,10 @@ contract Lottery is AutomationCompatible {
 
             delete participants;
             delete totalPrizePool;
+
+            for (uint256 i = 0; i <= participants.length; i++) {
+                delete usersDrawBalance[participants[i].participantAddress];
+            }
         }
     }
 
