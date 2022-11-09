@@ -5,16 +5,15 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 
-import "hardhat/console.sol";
-
 contract Lottery is AutomationCompatible {
     address public lotteryToken;
 
     uint256 public interval;
     uint256 public nextParticipateTimestamp;
+    uint256 public lotteryID;
 
     mapping(address => uint256) public usersContractBalance;
-    mapping(address => uint256) public usersDrawBalance;
+    mapping(uint256 => mapping(address => uint256)) public usersDrawBalance;
 
     uint256 public totalPrizePool;
     uint256 public totalAllTimePrizePool;
@@ -81,7 +80,7 @@ contract Lottery is AutomationCompatible {
             "Lottery:insufficient balance"
         );
 
-        usersDrawBalance[msg.sender] += _tokenAmount;
+        usersDrawBalance[lotteryID][msg.sender] += _tokenAmount;
         participants.push(
             ParticipantsInfo(
                 msg.sender,
@@ -96,6 +95,7 @@ contract Lottery is AutomationCompatible {
     }
 
     function selectRandomWinner() internal {
+        lotteryID++;
         if (participants.length == 0) {
             nextParticipateTimestamp = block.timestamp + interval;
         } else {
@@ -112,10 +112,6 @@ contract Lottery is AutomationCompatible {
 
             delete participants;
             delete totalPrizePool;
-
-            for (uint256 i = 0; i <= participants.length; i++) {
-                delete usersDrawBalance[participants[i].participantAddress];
-            }
         }
     }
 
